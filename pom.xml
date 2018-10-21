@@ -7,6 +7,9 @@
   <properties>
     <scala.version>2.11.8</scala.version>
     <kafka.version>1.0.2</kafka.version>
+    <spark.version>1.6.0-cdh5.7.0</spark.version>
+    <hadoop.version>2.6.0-cdh5.7.0</hadoop.version>
+    <hbase.version>1.2.0-cdh5.7.0</hbase.version>
   </properties>
 
   <repositories>
@@ -15,6 +18,12 @@
       <name>Scala-Tools Maven2 Repository</name>
       <url>http://scala-tools.org/repo-releases</url>
     </repository>
+    <!--添加cloudera repository-->
+    <repository>
+      <id>cloudera</id>
+      <url>https://repository.cloudera.com/artifactory/cloudera-repos</url>
+    </repository>
+
   </repositories>
 
   <pluginRepositories>
@@ -71,6 +80,29 @@
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka_2.12</artifactId>
       <version>${kafka.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-client</artifactId>
+      <version>${hadoop.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-client</artifactId>
+      <version>${hbase.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-server</artifactId>
+      <version>${hbase.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-streaming_2.10</artifactId>
+      <version>${spark.version}</version>
     </dependency>
 
 
