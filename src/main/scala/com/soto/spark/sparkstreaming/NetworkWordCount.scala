@@ -20,6 +20,8 @@ object NetworkWordCount {
       */
     val ssc = new StreamingContext(sparkConf,Seconds(5))
 
+
+
     val lines = ssc.socketTextStream("localhost",6789)
 
     val result = lines.flatMap(_.split(" ")).map((_,1)).reduceByKey(_+_)
