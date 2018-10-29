@@ -1,7 +1,7 @@
 package com.soto.spark.project
 
-import com.soto.spark.project.dao.CourseClickCountDAO
-import com.soto.spark.project.domain.{ClickLog, CourseClickCount}
+import com.soto.spark.project.dao.{CourseClickCountDAO, CourseSearchClickCountDAO}
+import com.soto.spark.project.domain.{ClickLog, CourseClickCount, CourseSearchClickCount}
 import com.soto.spark.project.utils.DateUtils
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.spark.SparkConf
@@ -72,17 +72,48 @@ object StatStreamingApp {
 
 
     //    测试步骤三：统计到现在为止实战课程的访问量
-    cleanData.map(x=>{
-//      HBase rowKey设计： 20181111_88
-      (x.time.substring(0,8)+"_"+x.courseId,1)
-    }).reduceByKey(_+_).foreachRDD(rdd => {
-      rdd.foreachPartition(partitionRecords =>{
+    cleanData.map(x => {
+      //      HBase rowKey设计： 20181111_88
+      (x.time.substring(0, 8) + "_" + x.courseId, 1)
+    }).reduceByKey(_ + _).foreachRDD(rdd => {
+      rdd.foreachPartition(partitionRecords => {
         val list = new ListBuffer[CourseClickCount]
         partitionRecords.foreach(pair => {
-          list.append(CourseClickCount(pair._1,pair._2))
-        } )
+          list.append(CourseClickCount(pair._1, pair._2))
+        })
 
         CourseClickCountDAO.save(list)
+      })
+    })
+
+    //    测试步骤四：统计搜索引擎过来的到现在为止实战课程的访问量
+
+    cleanData.map(x => {
+      /**
+        * http://cn.bing.com/search?q=Hadoop基础
+        *
+        * ==>
+        * http:/cn.bing.com/search?q=Hadoop基础
+        **/
+
+      val referer = x.refer.replaceAll("//", "/")
+      val splits = referer.split("/")
+
+      var host = ""
+      if (splits.length > 2) {
+        host = splits(1)
+      }
+      (host, x.courseId, x.time)
+    }).filter(_._1 != "").map(x => {
+      (x._3.substring(0, 8) + "_" + x._1 + "_" + x._2,1)
+    }).reduceByKey(_ + _).foreachRDD(rdd => {
+      rdd.foreachPartition(partitionRecords => {
+        val list = new ListBuffer[CourseSearchClickCount]
+        partitionRecords.foreach(pair => {
+          list.append(CourseSearchClickCount(pair._1, pair._2))
+        })
+
+        CourseSearchClickCountDAO.save(list)
       })
     })
 
