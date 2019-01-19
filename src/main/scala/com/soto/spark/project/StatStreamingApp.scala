@@ -26,7 +26,7 @@ object StatStreamingApp {
 
     val Array(brokers, topics) = args
 
-    val sparkConf = new SparkConf().setAppName("StatStreamingApp").setMaster("local[2]")
+    val sparkConf = new SparkConf().setAppName("StatStreamingApp")//.setMaster("local[2]")
 
     val ssc = new StreamingContext(sparkConf, Seconds(60))
 
