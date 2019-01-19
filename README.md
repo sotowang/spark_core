@@ -99,7 +99,48 @@ jsc.close();
 ```
         
 
+----
 
+## WordCountCluster.java 将Java开发的应用程序 部署到Spark集群上运行
+
+ 如果要在集群上运行 需要修改:
+ 
+ * 将SparkConf的setMaster() 方法删掉,默认它自己会去连接
+    
+```java
+SparkConf sparkConf = new SparkConf()
+                .setAppName("WordCountCluster");
+```
+ 
+ * 不使用本地文件,  修改为hadoop hdfs上的存储大数据的文件   
+
+```java
+JavaRDD<String> lines = jsc.textFile("hdfs://sotowang-pc:9000/input/hadoop002.pem");
+
+```
+
+* 将hadoop002.pem 文件上传到hdfs上
+
+* 使用maven插件对maven工程打包
+
+[使用Intellij Idea打包java为可执行jar包](https://blog.csdn.net/xuemengrui12/article/details/74984731)
+
+
+* 编写spark-submit 脚本
+
+```bash
+spark-submit 
+--class com.soto.spark.core.WordCountCluster
+--num-executors 3
+--driver-memory 100m
+--executor-memory 100m
+--executor-cores 3
+/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/workspace/spark-train/out/artifacts/spark_train_jar/spark-train.jar
+
+
+```
+
+* 执行sprk-submit脚本到集群执行
 
 
 
