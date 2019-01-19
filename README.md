@@ -203,19 +203,79 @@ spark-submit
 > Executor 和 Task 对RDD的partition进行并行计算,执行我们对RDD定义的map  flatmap reduce等操作
 
 
+---
+
+# 创建RDD
+
+## 并行化集合创建RDD  ParallelizeCollection.java
+
+### 案例:求1-10之和
+
+```java
+List<Integer> numbers = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+JavaRDD<Integer> numberRDD = jsc.parallelize(numbers);
+
+int sum = numberRDD.reduce(new Function2<Integer, Integer, Integer>() {
+            public Integer call(Integer num1, Integer num2) throws Exception {
+                return num1 + num2;
+            }
+        });
+```
+
+## 使用本地文件创建RDD  LocalFile.java
+
+### 案例: 统计文本文件字数
+
+针对本地文件创建RDD   textFile()方法
+
+```java
+//针对本地文件创建RDD   textFile()方法
+        JavaRDD<String> lines = jsc.textFile("/home/sotowang/user/note/other/data");
+
+        JavaRDD<Long> lineLength = lines.map(new Function<String, Long>() {
+            public Long call(String line) throws Exception {
+                return Long.valueOf(line.length());
+            }
+        });
 
 
+        Long count = lineLength.reduce(new Function2<Long, Long, Long>() {
+            public Long call(Long long1, Long long2) throws Exception {
+                return long1 + long2;
+            }
+        });
+
+        System.out.println("文件总字数是" + count);
+```
 
 
+## 使用HDFS文件创建RDD HDFSFile.java
 
+```java
+JavaRDD<String> lines = jsc.textFile("hdfs://sotowang-pc:9000/input/hadoop002.pem");
+```
 
+---
+# 常用transformation
 
+* map
+* filter
+* flatMap
+* groupByKey
+* reduceByKey
+* sortByKey
+* join
+* cogroup
 
+# 常用action
 
-
-
-
-
+* reduce
+* collect
+* count
+* take(n)
+* saveAsTextFile
+* countByKey
+* foreach
 
 
 
