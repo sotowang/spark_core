@@ -144,3 +144,79 @@ spark-submit
 
 
 
+---
+
+# Spark架构原理
+
+* Driver (是一个进程)
+
+```markdown
+1. 我们编写的Spark应用程序在Driver上,由Driver进程执行
+2. Spark集群的节点之一  --->就是你提交Spark程序的机器
+3. Driver进程启动后,会进行初始化操作,在这个过程中,会发送请求到Master上,进行Spark应用程序的注册(就是让Master知道有新的Spark应用程序在运行)
+4. Driver注册了一些Executor之后,可以正式执行Spark应用程序了
+
+```
+正式执行Spark应用程序的步骤
+
+> 1. 创建初始RDD,读取数据源 (HDFS文件被读取到多个worker节点上,形成内存中的分布式数据集,也就是初始RDD)
+> 2. Driver会根据我们对RDD定义的操作,提交一大堆task去Executor上 
+
+
+* Master (是一个进程)
+
+```markdown
+1. 负责资源的调度,集群监控
+2. 在接收到Spark应用程序注册请求后,发送请求给worker,进行资源的调度和分配(其实:资源分配就是Executor的分配)
+
+```
+
+
+* Worker(是一个进程)
+
+```markdown
+1. 用自己的内存存储RDD的某个或某些partition
+2. 启动其它进程和线程
+3. 对RDD上的partition进行处理和计算
+4. worker接收到Master请求后,会为Spark应用启动Executor
+
+```
+
+* Executor(是一个进程)
+
+```markdown
+1. 由worker启动,Executor启动后,会向Driver反注册,这样Driver就会知道 哪些Executor是为它进行服务了
+
+```
+
+
+
+* Task (是一个线程)
+
+```markdown
+1. 由Executor启动,task会对RDD的partition数据执行指定的算子操作,形成新的RDD partition
+
+```
+
+
+
+> Executor 和 Task 对RDD的partition进行并行计算,执行我们对RDD定义的map  flatmap reduce等操作
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
