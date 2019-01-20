@@ -277,6 +277,29 @@ JavaRDD<String> lines = jsc.textFile("hdfs://sotowang-pc:9000/input/hadoop002.pe
 * countByKey
 * foreach
 
+---
+
+# transformation操作实战 TransformationOperation.java
+
+## map算子案例: 将集合中每个元素都剩以二
+
+## filter算子案例: 过滤集合中的偶数
+如果想在新的RDD中保留元素,则返回true
+
+## flatMap案例:将文本行拆分为多个单词
+
+## groupByKey案例: 按照班级对成绩进行分组
+groupByKey算子,返回的还是JavaPairRDD
+但是,JavaPairRDD的第一个泛型类型不变,第二个泛型类型变成Iterable集合类型
+也就是谘,按照key进行分组,形成多个value
+
+## reduceByKey案例:统计每个班级的部分
+
+## sortByKey案例  按照学生分数进行排序
+
+## join和cogroup案例： 打印学生成绩
+
+# action操作实战 actionOperation.java
 
 
 
