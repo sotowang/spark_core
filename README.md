@@ -299,7 +299,23 @@ groupByKey算子,返回的还是JavaPairRDD
 
 ## join和cogroup案例： 打印学生成绩
 
+--- 
+
 # action操作实战 actionOperation.java
 
+## reduce案例： 对集合中数字累加
+
+## collect案例： 将集合数字剩以2 
+因其将远程RDD拉取到本地进行操作，因而不建议使用该方法，可能会造成OOM异常
+
+## count案例： 统计有多少个元素
+
+## take案例
+与collect类似，从远程获取RDD，但collect获取所有数据，take获取前N个数据
 
 
+## saveAstextFile
+
+## countByKey
+
+## foreach
