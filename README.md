@@ -360,13 +360,43 @@ cache() 或 persist使用
 共享变量只会将变量在每个节点copy一份，让节点上的所有task使用
 
 
-## Broadcast Variable （只读）
+## Broadcast Variable （只读） BroadcastVariable.java
 
 ```java
+final Broadcast<Integer> factorBroadcast = jsc.broadcast(factor);
 
+
+
+        List<Integer> numberList = Arrays.asList(1, 2, 3, 4, 5);
+
+        JavaRDD<Integer> numbers = jsc.parallelize(numberList);
+
+
+        //让集合中的每个数都剩以外部factor
+        JavaRDD<Integer> mutipleNum = numbers.map(new Function<Integer, Integer>() {
+            public Integer call(Integer integer) throws Exception {
+                int factor = factorBroadcast.value();
+                return integer * factor;
+            }
+        });
 ```
 
 
-## Accumulator （可写，因而可以累加）
+## Accumulator （可写，因而可以累加）  AccumulatorVariable.java
+
+task不能读Accumulator的值，Driver可以
+
+```java
+final Accumulator<Integer> sum = jsc.accumulator(0);
+        List<Integer> numberList = Arrays.asList(1, 2, 3, 4, 5);
+        JavaRDD<Integer> numbers = jsc.parallelize(numberList);
 
 
+        numbers.foreach(
+                new VoidFunction<Integer>() {
+                    public void call(Integer integer) throws Exception {
+                        sum.add(integer);
+                    }
+                }
+        );
+```
