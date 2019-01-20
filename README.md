@@ -405,10 +405,120 @@ final Accumulator<Integer> sum = jsc.accumulator(0);
 
 # 基于排序机制和wordCount程序  sortWordCount.java
 
+# 二次排序 
+
+SecondarySortKey.java
+
+```java
+package com.soto.spark.core;
+
+import scala.math.Ordered;
+
+import java.io.Serializable;
+
+/**
+ * 自定义 二次排序的key
+ */
+public class SecondarySortKey implements Ordered<SecondarySortKey>, Serializable {
+
+    private int first;
+    private int second;
+    
+    
+    public int compare(SecondarySortKey that) {
+        if (this.first - that.getFirst() != 0) {
+            return this.first - that.getFirst();
+        } else  {
+            return this.second - that.getSecond();
+        }
+    }
+
+    public boolean $less(SecondarySortKey that) {
+        if (this.first < that.getFirst()) {
+            return true;
+        } else if (this.first == that.getFirst() && this.second < that.getSecond()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public boolean $greater(SecondarySortKey that) {
+        if (this.first > that.getFirst()) {
+            return true;
+        } else if (this.first == that.getFirst() && this.second > that.getSecond()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public boolean $less$eq(SecondarySortKey that) {
+        if (this.first < that.getFirst()) {
+            return true;
+        } else if (this.first == that.getFirst() && this.second < that.getSecond()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public boolean $greater$eq(SecondarySortKey that) {
+        if (this.$greater(that)) {
+            return true;
+        } else if (this.first == that.getFirst() && this.second == that.getSecond()) {
+            return true;
+        }
+        return false;
+    }
+
+    public int compareTo(SecondarySortKey that) {
+        if (this.first - that.getFirst() != 0) {
+            return this.first - that.getFirst();
+        } else  {
+            return this.second - that.getSecond();
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        return super.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return super.equals(o);
+    }
+
+    public int getFirst() {
+        return first;
+    }
+
+    public void setFirst(int first) {
+        this.first = first;
+    }
+
+    public int getSecond() {
+        return second;
+    }
+
+    public void setSecond(int second) {
+        this.second = second;
+    }
+}
 
 
+```
 
+```markdown
+1. 实现自定义的key，要实现order接口和serializable接口，在key中实现对多个列的排序算法
+2. 将包含文本的RDD，映射成key为自定义key，value为文本的JavaPairRDD
+3. 使用sortByKey算子按照自定义的key进行排序
+4. 再次映射，剔除自定义的keey，只保留文本行
 
+```
+
+# 取TopN案例
 
 
 

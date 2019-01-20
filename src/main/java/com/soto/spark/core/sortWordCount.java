@@ -17,7 +17,7 @@ public class sortWordCount {
 
     public static void main(String[] args) {
         SparkConf sparkConf = new SparkConf()
-                .setAppName("Accumulator")
+                .setAppName("sortWordCount")
                 .setMaster("local");
 
         JavaSparkContext jsc = new JavaSparkContext(sparkConf);
