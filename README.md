@@ -319,3 +319,54 @@ groupByKey算子,返回的还是JavaPairRDD
 ## countByKey
 
 ## foreach
+
+---
+
+# RDD持久化机制  Persist.java
+
+cache() 或 persist使用
+
+> 必须在transformation 或者textFile创建了一个RDD之后，直接连续调用cache（）
+或persist（）才可以，若先创建RDD，别起一行cache（）或persist（）是没用的，且会报错，使文件丢失
+
+## 持久化策略（尽量不使用DISK）
+
+* MEMOEY_ONLY
+
+> 使用级别1
+
+* MEMORY_AND_DISK
+
+* MEMORY_ONLY_SER
+
+> 使用级别 2
+
+> 序列化+ 反序列化 减少内存开销，但加大CPU开销
+
+* MEMOEY_AND_DISK_SER
+
+* DISK_ONLY
+
+* MEMORY_ONLY_2MEMORY_AND_DISK_2
+
+> 2表示持久化后数据会复制一份 丢失后直接使用备份
+
+# 共享变量
+
+> 默认情况下，算子函数内，使用的外部变量，会copy到执行这个函数的每一个task中
+
+> 如果变量特别大的话，那么网络传输也会增大，在每个节点上占用的空间也会特别大
+
+共享变量只会将变量在每个节点copy一份，让节点上的所有task使用
+
+
+## Broadcast Variable （只读）
+
+```java
+
+```
+
+
+## Accumulator （可写，因而可以累加）
+
+
