@@ -715,7 +715,7 @@ JavaSparkContext sc = new JavaSparkContext(conf);
 
 ```
 
-* 避免使用多层嵌套的对欠是结构.
+* 避免使用多层嵌套的对象结构.
 
 比如,
 
@@ -743,9 +743,51 @@ String虽然比ArrayList,HashMap等数据结构高效,但还有额外信息消�
 这里提醒,在Spark应用中,id就不要用uuid了,因无法转成int,用自增的int类型的id即可
 
 
+## JVM垃圾回收调优
 
 
+### 优化Executor内存
 
+* 默认情况下,Executor的内存空间,40%给task,存放它在运行期间动态创建的对象,
+划了60%给RDD缓存,比如说我们执行RDD.cache()的时候,Executor上的RDD
+的 partition会占用60%空间缓存.
+
+>会导致内存空间很快填满,频繁触发GC,致task线程频繁停止,降低性能
+
+```java
+new Sparkconf().set("spark.storage.memoryFraction","0.5")
+
+```
+
+> 注: 比例越低,task占比越大
+
+
+* Executor中分配给task的内存空间,就是分配给task的jvm堆空间
+
+>新生代+老年代
+
+> 新生代:Eden区域+survivor1+survivor2
+
+首先创建的对象都是放入Eden和survivor1的,Survivor作为备用.Eden区域满了之后,触发minor gc操作,会回收新生代中不再使用的
+对象,此时Eden和Survivor1中的存活对象移入Survivor2区域.移完后,Eden和Survivor1中剩余的,就是不再使用的对象,那么gc将他们移除内存空间
+之后Survivor1和Survivor2角色调换,Survivor1变备用.
+
+> 如果一个对象在新生代,多次minor gc都存活,说明它是长时间存活的对象,会将它移入老年代
+
+若将Eden和Survivor1中的存活对象移入Survivor2区域时发现Survivor2内存不够用,则会将对象移入老年代,则会有短时间存活的对象进入老年代,占用内存空间,
+老年代会因此被快速占满,会触发Full GC,回收老年代对象.导致Full GC(特别慢)频繁发生,task线程频繁停止.
+
+
+* task期间,大量Full gc 发生,说明年轻代的Eden区间不够大
+
+```markdown
+1. 降低spark.storage.memoryFraction比例,给年轻代更多空间,存放短时间戚对象
+2. 给Eden区域分配更大空间,使用-Xmn,通常建议给Eden区域预计大小的3/4
+3. 如果使用HDFS文件,那么很好估计Eden大小,如果每个executor有4个task,然后每个hdfs压缩块解压缩后大小是3倍,此外每
+个hdfs块大小为64M,那么Eden区域预计大小为 4*3*64,再通过-Xmn对数,将Eden区域大小设置为 4*3*64*3/4
+
+
+```
 
 
 
