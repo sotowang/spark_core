@@ -697,4 +697,75 @@ JavaSparkContext sc = new JavaSparkContext(conf);
 > 此时使用默认的Java序列化机制,会导致序列化速度缓慢,且序列化后数据还是比较大,比较占用内存空间
 
 
+### 优化数据结构
+
+* 优先使用数组及字符串,而不是集合类,即优先拿手Array,而不是ArrayList,LinkedList,HashMap等集合
+
+```markdown
+比如List<Integer> list = new ArrayList<Integer>(),将其替换为int[] arr= new int[].
+这样的话 array既比List少了额外的信息存储开销,还能使用原始数据类型(int) 来存储数据,比List 中用Integer这种包装类型存储数据,要节省内存的多
+
+```
+
+```markdown
+比如 通常企业级应用的做法是,对于HashMap,List这种数据,统一用String拼接成特殊格式的字符串,
+比如Map<Integer,Person> persons = new HashMap<Integer,Person>().
+可以优化为特殊的字符串格式:
+    id,name,address|id,name,address...
+
+```
+
+* 避免使用多层嵌套的对欠是结构.
+
+比如,
+
+```java
+public class teacher{
+    private List<Student> students = new ArrayList<Student>()
+}
+```
+
+就是非常不好的例子,对于上述例子完全可以彩特殊的字符串来进行存储,比如使用json字符串来存储数据
+
+```json
+{"teacherId":1,
+"teacherName":"leo",
+"students":[{
+"studentId":1,
+"studentName":"tom"
+}]}
+```
+
+* 尽量使用int替代String
+
+String虽然比ArrayList,HashMap等数据结构高效,但还有额外信息消耗.比如之前用String表示id,那么现在完全可以用数字类型的int来进行代替
+
+这里提醒,在Spark应用中,id就不要用uuid了,因无法转成int,用自增的int类型的id即可
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
