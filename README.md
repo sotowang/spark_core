@@ -528,3 +528,137 @@ public class SecondarySortKey implements Ordered<SecondarySortKey>, Serializable
 * 分组取topN，案例：每个班级排名前3的成绩  GroupTop3.java
 
 
+---
+
+# Spark内核架构
+
+spark-submit 
+--> Driver(执行自己写的Application应用程序)   
+--> SparkContext（sparkContext初始化的时候做的两件事：构造出DAGScheduler和TaskScheduler）          
+--> DAGScheduler            
+--> TaskScheduler (负责通过它对应的一个后台进程去连接Master，向Master注册Application)        
+--> Master 接收到Application注册请求后，会使用自己的资源调度算法，在Spark集群的worker上，为这个Application启动多个Executor     
+--> Executor启动后会反向注册到TaskScheduler（Driver？？）上   
+--> 所有Executor都反向注册到Driver上之后，Driver结束SparkContext初始化，会继续执行我们所写的代码  
+--> 每执行到一个action，就会创建一个Job，Job会提交给DAGScheduler  
+--> DAGSCheduler 会将Job划分为多个stage（stage划分算法），然后每个stage创建一个TaskSet    
+--> TaskScheduler将TaskSet里每一个task提交到executor执行（task分配算法）    
+--> Executor每接收到一个task，都会用TaskRunner封闭task，然后从线程池里取一个线程，执行task      
+--> Taskrunner将我们编写的代码，也就是要执行的算子及耿发，copy，反序列化，然后执行task      
+    task有2种，ShuffleMapTask和ResultTask，只有最后一个stage是ResultTask，之前的stage，都是ShuffleMapTask      
+    
+--> 所以最后整个Spark应用程序的执行，就是stage分批次作为taskset提交到executor执行，每个task针对RDD的一个partition，执行我们定义的算子和函数
+
+
+## 宽依赖（Shuffle Dependency）与窄依赖（Narrow Dependency）
+
+* 窄依赖： 一个RDD，对它的父RDD，只有简单的一对一关系，即RDD的每个partition，仅仅依赖父RDD中的一个partition，父RDD
+和子RDD的partition之间的对应关系是一对一的
+  
+* 宽依赖： 本质就是shuffle，每一个父RDD的partition中的数据，都可能会传输一部分，具有交互错综复杂的关系
+
+## Spark的三种提交模式
+
+* standalone模式
+
+* yarn-cluster模式
+
+* yarn-client模式
+
+若要切换到第二或三种模式，在spark-submit脚本上--master参数，设置为yarn-cluster，或yarn-client，默认为standalone模式
+
+--> spark-submit 提交（yarn-cluster）   
+--> 发送请求到ResourceManager，请求启动ApplicationMaster（相当于Driver）  
+--> ResourceManager 分配container在某个nodeManager上，启动ApplicationMaster  
+--> AM找到RM，请求container，启动executor   
+--> AM连接其它NM，来启动executor，这里NM相当于worker  
+--> executor启动后，向AM反向注册
+
+### yarn-cluster与yarn-client
+
+* 1. yarn-client用于测试，因为driver运行在本地客户端，负责调度application，会与yarn集群产生大量的网络通信，从而导致网卡流量激增
+可能会被公司运维警告，好处在于，直接执行时，本地可以看到所有的log，方便调试
+* 2. yarn-cluster，用于生产环境，以为driver运行在nodemanager，没有网卡済激增问题
+缺点在于，调度不方便，本地用spark-submit提交后，看不到log，只能通过yarn application-logs application id 这种命令查看
+
+
+---
+
+## SparkContext 原理剖析
+
+--> sparkcontext（）  
+--> createTaskScheduler() (其实就是TaskScheduler)
+
+```markdown
+TaskSchedulerImpl,  
+SparkDeploySchedulerBackend()
+(它在底层接收TaskSchedulerImpl的控制,实际上负责Master的注册,Executor的反注册,task发送到Executor等操作)
+创建SchedulePool,它有不同的优先策略,比如FIFO
+```   
+--> TaskSchedulerImpl的start     
+--> SparkDeploySchedulerBackend()的start     
+--> Appclient       
+--> 创建一个ClientActor     
+--> registerWithMaster()->tryRegesterAllMasters()       
+--> RegisterApplication(case class,里面封闭了Application的信息)     
+--> Spark集群,Master->worker->executor
+--> 反向注册到SparkDeploySchedulerBackend()上
+
+---
+
+# Spark 性能调优
+
+## 诊断内存的消耗
+
+### 内存都花费在哪里了
+
+
+* 每一个Java对象,都有一个对象头,会占用16个字节,主要包括一些对象的元信息,比如指向它的类的指针,如果一个对象本身很小,如比就包括了int类型的field,那么其对象头比对象还大
+
+
+对象头
+
+```markdown
+在32位系统上占用8bytes，64位系统上占用16bytes。
+```
+
+* Java的String对象,会比它内部的原始数据,多出40个字节.
+因为它内部使用char数组来保存内部的字符序列,并且还得保存诸如数组长度之类的信息.而且因为String使用的是UTF-8编码,
+所以每个字符会占用2个字节.比如10个字符的String,会占用60个字节
+
+* Java中的集合类型,比如HashMap和LinkedList,内部使用的是链表数据结构,所以对链表中的每一个数据,都使用了Entry对象来包装.
+Entry不光有对象头,还有指向下一个Entry的指针,通常占用8个字节
+
+* 元素类型为原始数据类型的集合(如int),内部通常会使用原始数据类型的包装类型,比如integer来存储元素
+
+```markdown
+Java定义了八种基本类型的数据：byte，short，int，long，char，float，double和boolean。
+```
+
+### 如何判断程序消耗了多少内存
+
+* 首先,自己设置RDD的并行度,有两种方式:1. 在parallelize(),textFile()等方法中传入第二个参数,设置RDD的task/
+partition的数量. 2.用SparkConf.set()方法设置一个参数,spark.default.parallelism,可以统一设置这个application所有RDD的partition数量
+
+* 在程序中将RDD cache 到内存中,调用RDD.cache() 方法
+
+* 观察Driver的log,会发现类似于: "INFOBlockManagerMasterActor.Added rdd_0_1 in memory on mbk.local:50311(size:717.5 kb,free:332.3MB)"
+的日志信息,这就显示了每个partition占用了多少内存
+
+* 将这个内存信息剩以partition数量,可得RDD内存占用量
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
