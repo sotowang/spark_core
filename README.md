@@ -648,17 +648,53 @@ partition的数量. 2.用SparkConf.set()方法设置一个参数,spark.default.p
 * 将这个内存信息剩以partition数量,可得RDD内存占用量
 
 
+## 高性能序列化类库
 
+* Java序列化机制(默认)
 
+* Kryo序列化机制
 
+```java
+new SparkConf().set("saprk.serializer","org.apache.spark.serializer.KyroSerializer")
+```
 
+使用Kryo时,它要求是需要序列化的类,要预先进行注册,以获得最佳性能,如果不注册的话,那么Kryo必须时文保存类型的全限定名,反而占用不少内存.
+Spark默认是对Scala中常用的类型自动注册了Kryo的,都在AllScalaRegistry类中     
 
+但是,比如自己的算子中,使用了外部的有很大定义类型的对象,那么还是需要进行注册
 
+> 如果要实现自定义类型,使用如下代码
 
+```java
 
+SparkConf conf = new SparkConf().setMaster(...).setAppName(...);
+conf.registerKryoClasses(Counter.class);
+JavaSparkContext sc = new JavaSparkContext(conf);
 
+```
 
+### 优化Kryo类库的使用
 
+* 优化缓存大小
+
+>如果注册的要序列化的自定义类型,本身特别大,比如包含了超过100个field,那么就会导致要序列化和对象过大.此时就需要对Kryo本身进行优化.
+因为Kryo内部的缓存可能不够存放那么大的class对象.此时就需要调用SparkConf.set()方法,设置spark.kryoserializer.buffer.mb参数值,将其调大
+
+>默认情况下值为2,最大能缓存2M的对象,然后进行序列化,可以将其在必要时调大,比如10
+
+* 预先注册自定义类型
+
+> 虽然不注册自定义类型,Kryo类库也能正常工作,但女士们的话,对天它要序列化的每个对允是,都会保存一份它的全限定类名.
+此时反而会耗费大量内存.因此通常都建议预先注册好要序列化的自定义的类.
+
+### 在什么场景下使用Kryo类库
+
+*  算子函数使用到了外部的大数据的情况
+
+>如:我们在外部定义了一个封闭了应用所有配置的对象,比如自定义了一个Myconfiguration对象,里面包含了100m的数据.
+然后在算子函数里面,使用到了该对象
+
+> 此时使用默认的Java序列化机制,会导致序列化速度缓慢,且序列化后数据还是比较大,比较占用内存空间
 
 
 
