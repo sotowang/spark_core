@@ -606,6 +606,81 @@ SparkDeploySchedulerBackend()
 
 ---
 
+
+## Shuffle原理剖析与源码剖析
+
+* 什么时候会发生shuffle？
+
+> reduceByKey,groupByKep,sortByKey,countByKey,join,cogroup等积和
+
+假设有一个节点,上面运行了4个ShuffleMapTask,节点上有2个cpu core.   
+
+每个ShuffleMapTask都会不每个ResultTask创建一份bucket缓存(在内存),以及对应的ShuffleBlockFile磁盘文件
+
+假设有另一个节点,上面也运行了4个ResultTask,等着要去获取ShuffleMapTask的输出数据,来完成如reduceByKey操作
+
+--> bucket-->缓存刷新到ShuffleBlockFile磁盘
+
+ShuffleMapTask的输出会作为MapStatus,发送到DAGScheduler和MapOutputTracker Master中,ResultTask读取后去ShuffleBlockFile拉取自己的数据
+
+> MapStatus: 包含了每个ResultTask要摘取的数据的大小
+
+> 每个ResultTask会用BlockStoreShuffleFetcher去MapOutputTrackerMaster获取自己的要摘取的文件的信息,然后底层通过
+BlockManager将数据拉取过来
+
+> 每个ResultTask拉取过来的数据,组成一个内部的RDD,叫ShuffledRDD,优先放入内存,若内存不够,就写入磁盘
+
+> 然后每个ResultTask针对数据进行聚合,最后生成MapPartitionsRDD,就是我们执行reduceByKey等操作要获取的RDD
+
+
+```markdown
+假设有100个map task,100个result task,本地磁盘就会产生10000个文件,磁盘IO过多,影响性能
+```
+
+
+* 默认(普通)的shuffle原理剖析
+
+SparkShuffle操作的两个特点:
+
+```markdown
+1. 在Spark早期版本中,bucket缓存很重要,因需要将ShuffleMapTask的所有数据写入内存缓存以后,都会刷新到磁盘.
+    但若map side 数据过多,会OOM,故在Spark新版本中,优化了默认缓存为100kb,写入一点数据达到了刷新磁盘的阈值后
+    会将数据刷新到磁盘.
+    操作的优点: 不容易发生磁盘溢出
+    缺点:若内存缓存过小,可能发生过多的磁盘写IO操作,故这里的内存缓存在大小可以根据实际业务进行优化
+    
+2. 与MapReduce完全不一样的是,MapReduce必须将所有数据写入磁盘再reduce操作,来拉取数据
+    因为mapReduce要实现根据key的排序,要实现排序就要写完所有数据,才能排序
+    但Spark不需要,默认情况下,不会对数据排序.因而ShuffleMapTask每写入一点数据,ResultTask就可以拉取一点数据,然后在本地执行我们定义的聚合函数和算子计算
+    
+    spark这种机制的好处:比mapreduce快
+    缺点:mapreduce提供的reduce,可以处理每个key对应的value,很方便,但Spark是,由于这种实时拉取的机制,提供不了
+    直接处理key对应的values的算子,只能通过groupByKey先Shuffle,有一个MapPartitionsRDD,然后用map算子,来处理每个
+    key对应的values,就没有mapreduce的计算模型那么方便
+    
+
+```
+
+
+
+* 优化后的shuffle原理剖析
+
+Spark新版本中,引入了consolidation机制,提出了ShuffleGroup的概念
+
+> 一个ShuffleMapTask将数据写入ResultTask数量和本地文件,不会变,但当下一个ShuffleMapTask运行的时候,可怕将数据写入
+之前的ShuffleMapTask的本地文件.相当于多个ShuffleMapTask的输出进行了合并,从而大大减少本地磁盘的数量
+
+> 开启了consolidation机制后,每个节点上的磁盘文件,数量变为cpu core * ResultTask数量,比如每个节点有2个cpu,有100个ResultTask,那么共200个磁盘文件
+
+> 但按照普通的shuffle操作来说比如每个节点有2个cpu,有100个ShuffleMapTask,会产生100*100=10000个文件
+
+
+* shuffle相关源码分析
+
+
+
+---
+
 # Spark 性能调优
 
 ## 诊断内存的消耗
@@ -789,10 +864,53 @@ new Sparkconf().set("spark.storage.memoryFraction","0.5")
 
 ```
 
+## 提高并行度
+
+cpu core 与 task 并行度partition之间关系
+
+## 广播共享数据
+
+默认情况下,算子函数使用外部数据,会被copy到每一个task中,如果共享数据较大,会产生大量的流量
+
+通过广播变量,使每个节点一份数据,task共享该数据(上面有讲过了)
 
 
+## 数据本地化
+
+[Spark性能调优之数据本地化](https://blog.csdn.net/JasonZhangOO/article/details/79350149)
+
+数据本地化的几个级别：
 
 
+```markdown
+
+PROCESS_LOCAL：进程本地化，代码和数据在同一个进程中，也就是在同一个executor中；计算数据的task由executor执行，数据在executor的BlockManager中；性能最好
+
+NODE_LOCAL：节点本地化，代码和数据在同一个节点中；比如说，数据作为一个HDFS block块，就在节点上，而task在节点上某个executor中运行；或者是，数据和task在一个节点上的不同executor中；数据需要在进程间进行传输
+
+NO_PREF：对于task来说，数据从哪里获取都一样，没有好坏之分
+
+RACK_LOCAL：机架本地化，数据和task在一个机架的两个节点上；数据需要通过网络在节点之间进行传输
+
+ANY：数据和task可能在集群中的任何地方，而且不在一个机架中，性能最差
+```
+
+```java
+new SparkConf().set("spark.locality.wait","10")
+
+```
+
+>Spark在Driver上，对Application的每一个stage的task，进行分配之前，
+都会计算出每个task要计算的是哪个分片数据，RDD的某个partition；
+Spark的task分配算法，优先，会希望每个task正好分配到它要计算的数据所在的节点，
+这样的话，就不用在网络间传输数据；
+但是呢，通常来说，有时，事与愿违，可能task没有机会分配到它的数据所在的节点，
+为什么呢，可能那个节点的计算资源和计算能力都满了；
+所以呢，这种时候，通常来说，Spark会等待一段时间，默认情况下是3s钟（不是绝对的，还有很多种情况，对不同的本地化级别，都会去等待），到最后，实在是等待不了了，就会选择一个比较差的本地化级别，比如说，将task分配到靠它要计算的数据所在节点，比较近的一个节点，然后进行计算。
+但是对于第二种情况，通常来说，肯定是要发生数据传输，task会通过其所在节点的BlockManager来获取数据，BlockManager发现自己本地没有数据，会通过一个getRemote()方法，通过TransferService（网络数据传输组件）从数据所在节点的BlockManager中，获取数据，通过网络传输回task所在节点。
+
+
+## reduceByKey和groupByKey
 
 
 
